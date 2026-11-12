@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>トレファクさがし帳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.trefac.jp">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top wrap">
+  <div class="brandline">
+    <h1>トレファク<span class="d">さがし帳</span><small>メンズ古着</small></h1>
+    <button type="button" class="search-toggle" id="searchToggle" aria-controls="form" aria-expanded="true" title="検索バーを閉じる">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span id="searchToggleLabel">検索バーを閉じる</span>
+    </button>
+  </div>
+  <form class="searchbox" id="form" role="search" autocomplete="off">
+    <div class="field">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="q" type="search" enterkeyhint="search" placeholder="ブランド・商品名・色で探す" aria-label="商品を検索" aria-autocomplete="list" aria-controls="suggest">
+      <button type="button" class="clear" id="clear" aria-label="検索語を消す" hidden>×</button>
+    </div>
+    <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+  </form>
+  <div class="mybar" id="mybar">
+    <span class="mylabel">マイブランド</span>
+    <div class="mychips" id="mychips"></div>
+  </div>
+  <p class="hint" id="hint">例：<button type="button" class="ex">ノースフェイス マウンテンパーカー</button><button type="button" class="ex">オーラリー</button><button type="button" class="ex">ニット 黒</button><button type="button" class="ex">リーバイス 501</button>　スペースで絞り込み、<b>-語</b>で除外、<b>"語"</b>で言い換えなし</p>
+</header>
+
+<main class="wrap">
+  <section id="view-search" class="layout">
+    <button type="button" class="rail" id="railOpen" aria-controls="filters" aria-expanded="false" title="絞り込みを開く">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>絞り込み</span>
+    </button>
+    <aside class="filters" id="filters" aria-label="絞り込み">
+      <div class="side-head">
+        <b>絞り込み</b>
+        <button type="button" class="side-close" id="sideClose" aria-controls="filters" title="絞り込みを閉じる">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>閉じる
+        </button>
+      </div>
+      <div class="fgroup">
+        <h2>しぼる</h2>
+        <label class="toggle" id="l-mine"><input type="checkbox" id="f-mine"> マイブランドだけ</label>
+        <label class="toggle" id="l-today"><input type="checkbox" id="f-today"> <span id="todayLabel">今日見つけた商品だけ</span></label>
+        <label class="toggle"><input type="checkbox" id="f-new"> NEW マークの商品だけ</label>
+        <label class="toggle"><input type="checkbox" id="f-sale"> SALE（値下げ）だけ</label>
+      </div>
+      <div class="fgroup">
+        <h2>ブランド</h2>
+        <div id="f-brand" class="brandlist"></div>
+      </div>
+      <div class="fgroup">
+        <h2>カテゴリ</h2>
+        <div id="f-cat" class="cattree"></div>
+      </div>
+      <div class="fgroup" id="g-size">
+        <h2>サイズ</h2>
+        <div class="sizes" id="f-size"></div>
+      </div>
+      <div class="fgroup">
+        <h2>色</h2>
+        <div class="swatches" id="f-color"></div>
+      </div>
+      <div class="fgroup">
+        <h2>状態</h2>
+        <div class="checks" id="f-cond"></div>
+      </div>
+      <div class="fgroup">
+        <h2>価格</h2>
+        <div class="checks" id="f-price"></div>
+      </div>
+      <button type="button" class="reset" id="reset">条件をすべて外す</button>
+    </aside>
+
+    <div class="results">
+      <div class="resbar">
+        <div class="count" id="count" aria-live="polite">読み込み中…</div>
+        <div class="resbar-right">
+          <button type="button" class="filter-open" id="filterOpen" aria-controls="filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="fo-label">絞り込み</span><span id="filterBadge"></span></button>
+          <div class="seg seg-4" id="sort" role="radiogroup" aria-label="並び順" data-active="0">
+            <span class="seg-thumb" aria-hidden="true"></span>
+            <button type="button" role="radio" data-sort="rel" aria-checked="true" title="検索語によく合う順。検索語がなければ新着順">おすすめ</button>
+            <button type="button" role="radio" data-sort="new" aria-checked="false" title="トレファクに出た新しい順">新着順</button>
+            <button type="button" role="radio" data-sort="low" aria-checked="false" title="価格の安い順">安い順</button>
+            <button type="button" role="radio" data-sort="high" aria-checked="false" title="価格の高い順">高い順</button>
+          </div>
+        </div>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="notice" id="notice" hidden></div>
+      <div class="grid" id="grid"></div>
+      <div class="more" id="more" hidden><button type="button" id="moreBtn">もっと見る</button></div>
+      <div id="sentinel"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div id="updated"></div>
+    <div>出典：<a href="https://www.trefac.jp/" target="_blank" rel="noopener">トレファクオンライン</a>のメンズ（男女兼用を含む）の在庫。毎朝自動で取り直しています。個人で作った非公式のサイトで、トレジャー・ファクトリーとは関係ありません。</div>
+    <div>古着は 1 点ものなので、ここに出ていても売れていることがあります。価格は税込で、毎朝の時点のものです。買う前に商品ページで確かめてください。</div>
+  </footer>
+</main>
+
+<script src="search.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
