@@ -150,7 +150,7 @@ LETTER = {"XXS": "XXS", "XS": "XS", "S": "S", "M": "M", "L": "L", "XL": "XL", "X
 def norm_size(s):
     """サイズの書き方を揃える。「Ｍ」「JPN M」「SIZE M」→ M、「2XL」→ XXL。数字などはそのまま"""
     s = unicodedata.normalize("NFKC", html.unescape(s or "")).translate(SIZE_FIX).strip()
-    s = re.sub(r"^(SIZE|Size|size)[\s:：]*", "", s).strip()
+    s = re.sub(r"^(SIZE|Size|size|サイズ)[\s:：]*", "", s).strip()
     if not s or s.startswith("不明") or s in ("-", "--", "ー", "なし"):
         return ""
     up = s.upper()
