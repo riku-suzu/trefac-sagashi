@@ -33,10 +33,11 @@ OUT_DIR = os.path.join(ROOT, "public", "data")
 STATE = os.path.join(ROOT, "data", "combos.json")
 BASE = "https://www.trefac.jp"
 UA = "trefac-sagashi/1.0 (personal catalog; once a day)"
-INTERVAL = 1.0           # 取る間隔（秒）。店に負担をかけない
+INTERVAL = 2.0           # 取る間隔（秒）。1 秒おきに 1 時間ほど取ると 429（多すぎる）で断られた（2026-11-12）
 PER_PAGE = 90            # 1 ページの件数（トレファクの最大）
 MAX_PAGE = 111           # 1 つの条件でめくれるページの上限（90 × 111 = 9,990 件）
-ROTATE_PAGES = 400       # 売れた商品を見つけるための見直しに使うページ数（1 日あたり）
+ROTATE_PAGES = 300       # 売れた商品を見つけるための見直しに使うページ数（1 日あたり）
+NEW_PAGES = 5            # 新着と値下げを見るとき、1 つのカテゴリでめくるページの上限
 STALE_DAYS = 14          # この日数見かけなかった商品は消す
 MAX_MINUTES = 170        # これを過ぎたら取れた分で書き出す
 RECENT_N = 3000          # 最初に読む「新着」ファイルの件数
@@ -66,6 +67,7 @@ COLOR_WORDS = [
 _last = 0.0
 _started = time.time()
 _fails = 0
+_blocked = False
 
 
 def color_class(name):
@@ -85,8 +87,8 @@ def out_of_time():
 
 def fetch(path):
     """ページを取る。だめなら None。断られ続けたら（10 回続けて失敗）それ以上は取らない"""
-    global _last, _fails
-    if _fails >= 10:
+    global _last, _fails, _blocked
+    if _fails >= 10 or _blocked:
         return None
     url = path if path.startswith("http") else BASE + path
     for attempt in range(4):
@@ -104,6 +106,11 @@ def fetch(path):
             return body.decode("utf-8", "replace")
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             if getattr(e, "code", None) == 404:
+                return None
+            # 「多すぎる」と言われたら、その日はもう取らない
+            if getattr(e, "code", None) in (429, 403):
+                print(f"  断られた（{e}）。今日はここまでにします: {url}", file=sys.stderr)
+                _blocked = True
                 return None
             print(f"  取れなかった（{e}）: {url}  {attempt + 1}回目", file=sys.stderr)
             time.sleep(5 * (attempt + 1))
@@ -197,7 +204,8 @@ def parse_items(page):
 
 
 def list_url(gcateg, kind, cond, page, order=""):
-    q = f"kind={kind}&gcondition={cond}&step=1&disp_num={PER_PAGE}"
+    """cond が None なら状態で分けない（カテゴリの全部）"""
+    q = f"kind={kind}" + (f"&gcondition={cond}" if cond is not None else "") + f"&step=1&disp_num={PER_PAGE}"
     if order:
         q += f"&order={order}"
     if page > 1:
@@ -322,17 +330,21 @@ def main():
         by_combo.setdefault(f"{it['kind']}-{it['cond']}", []).append(it)
 
     stats = {"new": 0, "changed": 0, "gone": 0, "pages": 0}
+    # 前回までにいちばん新しかった登録番号。これより大きい番号の商品が「今日入荷した商品」
+    max_c = max((it["c"] for it in items.values()), default=0)
 
     def take(found, kind, cond):
-        """ページで見つけた商品を取り込む。新しい商品か値段の変わった商品があれば True"""
+        """ページで見つけた商品を取り込む。cond が None（状態で分けていない一覧）なら状態は前のまま（初めてなら 0＝不明）。
+        今日入荷した商品か、値段の変わった商品があれば True"""
         event = False
         for x in found:
             old = items.get(x["id"])
             if old is None:
-                x.update(kind=kind, cond=cond, first=0 if first_run else day, seen=day, prev=0)
+                fresh = not first_run and x["c"] > max_c
+                x.update(kind=kind, cond=cond or 0, first=day if fresh else 0, seen=day, prev=0)
                 items[x["id"]] = x
                 stats["new"] += 1
-                event = True
+                event = event or fresh
                 continue
             if old["price"] != x["price"]:
                 stats["changed"] += 1
@@ -344,11 +356,13 @@ def main():
                     old["prev"] = 0
             for k in ("price", "flags", "brand", "kana", "name", "color", "size", "shop", "img", "c"):
                 old[k] = x[k]
-            old.update(kind=kind, cond=cond, seen=day)
+            old.update(kind=kind, seen=day)
+            if cond is not None:
+                old["cond"] = cond
         return event
 
-    def sweep(g, k, c, mode):
-        """mode="new"：変化のないページまで。mode="full"：全部。全部見終えたら見つけた id の集合を返す"""
+    def sweep(g, k, c):
+        """組（カテゴリ×状態）を全部めくる。見終えたら、見つからなかった商品（売れた商品）を消す"""
         key = f"{k}-{c}"
         seen, total, page, walked = set(), None, 1, False
         orders = [""]
@@ -363,20 +377,17 @@ def main():
                 total = parse_total(p)
                 state.setdefault(key, {})["n"] = total
                 # 9,990 件を超える組は、安い順・高い順でも全部めくって取りこぼしを減らす
-                if mode == "full" and total > PER_PAGE * MAX_PAGE:
+                if total > PER_PAGE * MAX_PAGE:
                     orders = ["", "pdown", "phigh"]
             found = parse_items(p)
             seen.update(x["id"] for x in found)
-            event = take(found, k, c)
-            last = page >= min(MAX_PAGE, (total + PER_PAGE - 1) // PER_PAGE) or not found
-            if last:
+            take(found, k, c)
+            if page >= min(MAX_PAGE, (total + PER_PAGE - 1) // PER_PAGE) or not found:
                 if len(orders) > 1:
                     orders.pop(0)
                     page = 1
                     continue
                 walked = True
-                break
-            if mode == "new" and not event and not first_run:
                 break
             page += 1
         if walked:
@@ -389,40 +400,56 @@ def main():
                     stats["gone"] += 1
         return walked
 
-    # 1. 新着と値下げ
-    for i, (g, k, c) in enumerate(combos):
+    def stopped():
         if out_of_time():
             print("時間切れ。取れた分で書き出します")
-            break
-        if _fails >= 10:
-            print("断られ続けたので、取れた分で書き出します")
-            break
-        sweep(g, k, c, "new" if not first_run else "full")
-        if (i + 1) % 50 == 0:
-            print(f"  {i + 1}/{len(combos)}組  新しい商品 {stats['new']:,}  値段の変化 {stats['changed']:,}  {stats['pages']:,}ページ", flush=True)
+            return True
+        if _fails >= 10 or _blocked:
+            print("断られたので、取れた分で書き出します")
+            return True
+        return False
 
-    # 2. 売れた商品を見つけるための見直し（初回はいらない）
-    if not first_run:
+    if first_run:
+        # 初回：全部の組を全部めくる
+        for i, (g, k, c) in enumerate(combos):
+            if stopped():
+                break
+            sweep(g, k, c)
+            if (i + 1) % 50 == 0:
+                print(f"  {i + 1}/{len(combos)}組  {stats['new']:,}件  {stats['pages']:,}ページ", flush=True)
+    else:
+        # 1. 新着と値下げ：カテゴリごとに新着順（入荷と値下げが混ざった順）でめくり、
+        #    今日入荷した商品も値段の変化もないページで止める
+        for g, _, k, _ in kinds:
+            if stopped():
+                break
+            for page in range(1, NEW_PAGES + 1):
+                p = fetch(list_url(g, k, None, page))
+                stats["pages"] += 1
+                if p is None:
+                    break
+                found = parse_items(p)
+                if not take(found, k, None) or len(found) < PER_PAGE:
+                    break
+        print(f"  新着と値下げ：新しい商品 {stats['new']:,}  値段の変化 {stats['changed']:,}  {stats['pages']:,}ページ", flush=True)
+
+        # 2. 見直し：最後に全部めくった日が古い組（まだ一度もめくっていない組が先）から、ROTATE_PAGES ページぶん
         budget = ROTATE_PAGES
         order = sorted(combos, key=lambda x: state.get(f"{x[1]}-{x[2]}", {}).get("full", 0))
         for g, k, c in order:
-            info = state.get(f"{k}-{c}", {})
-            if info.get("full") == day:
-                continue
-            need = min(MAX_PAGE, (info.get("n", 0) + PER_PAGE - 1) // PER_PAGE) or 1
-            if need > budget or out_of_time() or _fails >= 10:
-                if budget < 20 or out_of_time() or _fails >= 10:
-                    break
-                continue
+            if budget <= 0 or stopped():
+                break
             before = stats["pages"]
-            sweep(g, k, c, "full")
+            sweep(g, k, c)
             budget -= stats["pages"] - before
+        print(f"  見直し：{ROTATE_PAGES - budget}ページ", flush=True)
 
     # 3. 長く見かけない商品を消す
     for gid in [g for g, it in items.items() if days_between(it["seen"], day) >= STALE_DAYS]:
         del items[gid]
         stats["gone"] += 1
 
+    stamp = dt.datetime.now(JST).strftime("%Y-%m-%d %H:%M")
     write(items, kinds, state, stamp, day)
     print(f"書き出し：{len(items):,}件（新しい商品 {stats['new']:,}、値段の変化 {stats['changed']:,}、"
           f"売れた・消えた {stats['gone']:,}、{stats['pages']:,}ページ、{(time.time() - _started) / 60:.0f}分）")
