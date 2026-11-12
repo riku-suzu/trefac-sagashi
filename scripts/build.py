@@ -435,7 +435,9 @@ def main():
 
         # 2. 見直し：最後に全部めくった日が古い組（まだ一度もめくっていない組が先）から、ROTATE_PAGES ページぶん
         budget = ROTATE_PAGES
-        order = sorted(combos, key=lambda x: state.get(f"{x[1]}-{x[2]}", {}).get("full", 0))
+        # まだ一度もめくっていない組の中では、先に埋めたい大分類（シューズ）を前にする
+        first_groups = {93: 0}
+        order = sorted(combos, key=lambda x: (state.get(f"{x[1]}-{x[2]}", {}).get("full", 0), first_groups.get(x[0], 1)))
         for g, k, c in order:
             if budget <= 0 or stopped():
                 break
