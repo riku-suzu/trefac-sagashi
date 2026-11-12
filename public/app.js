@@ -218,6 +218,14 @@
     if (catKey !== prevCat) replay($("#f-cat"), "enter");
     prevCat = catKey;
     $("#filterBadge").textContent = chips.length || "";
+
+    // ブランドを 1 つだけ選んでいるときは、一覧の上にマイブランドのボタンを出す
+    const one = state.brands.size === 1 ? [...state.brands][0] : "";
+    $("#addmine").hidden = !one;
+    if (one) {
+      const on = myBrands.has(one);
+      $("#addmine").innerHTML = `<button type="button" data-star="${esc(one)}" aria-pressed="${on}"><span class="st">${on ? "★" : "☆"}</span><span>${esc(one)} を${on ? "マイブランドから外す" : "マイブランドに入れる"}</span></button>`;
+    }
   }
   let chipActions = [], prevChips = new Set(), prevCat = "";
   function setSeg(el, key, value) {
@@ -408,9 +416,20 @@
     if (!q) return;
     store.set("recent", [q, ...store.get("recent", []).filter((w) => w !== q)].slice(0, 10));
   }
+  let toastTimer;
+  function toast(text) {
+    const t = $("#toast");
+    t.textContent = text;
+    t.hidden = false;
+    replay(t, "pop");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (t.hidden = true), 2200);
+  }
   function toggleMine(b) {
-    myBrands.has(b) ? myBrands.delete(b) : myBrands.add(b);
+    const add = !myBrands.has(b);
+    add ? myBrands.add(b) : myBrands.delete(b);
     saveMine();
+    toast(add ? `★ ${b} をマイブランドに入れました` : `${b} をマイブランドから外しました`);
     if (!myBrands.size) state.mine = false;
     refresh(true);
   }
@@ -516,6 +535,10 @@
     };
     $("#reset").addEventListener("click", resetAll);
     $("#grid").addEventListener("click", (e) => { if (e.target.id === "emptyReset") resetAll(); });
+    $("#addmine").addEventListener("click", (e) => {
+      const s = e.target.closest("[data-star]");
+      if (s) toggleMine(s.dataset.star);
+    });
     $("#chips").addEventListener("click", (e) => {
       const c = e.target.closest("[data-chip]");
       if (c) { chipActions[+c.dataset.chip](); refresh(); }

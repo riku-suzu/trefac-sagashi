@@ -88,7 +88,7 @@ h1 small { display: inline-block; margin-left: .7em; padding: 1px 8px 2px; font-
 .mychip.all { font-weight: 500; }
 .brandlist { display: grid; gap: 1px; }
 .brow { display: flex; align-items: center; gap: 2px; }
-.star { flex: none; width: 24px; height: 26px; border: 0; background: none; padding: 0; font-size: 15px; line-height: 1; color: var(--muted); border-radius: 6px; }
+.star { flex: none; width: 32px; height: 32px; border: 0; background: none; padding: 0; font-size: 15px; line-height: 1; color: var(--muted); border-radius: 6px; }
 .star:hover { color: var(--fg); background: var(--surface); }
 .star[aria-pressed="true"] { color: #d9a400; }
 .bname { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: left; border: 0; background: none; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
@@ -97,6 +97,15 @@ h1 small { display: inline-block; margin-left: .7em; padding: 1px 8px 2px; font-
 .bname:hover { background: var(--surface); }
 .bname[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
 .bname[aria-pressed="true"] .n { color: inherit; opacity: .7; }
+.addmine { padding-top: 10px; }
+.addmine button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--fg); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700; }
+.addmine button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.addmine .st { color: #d9a400; font-size: 15px; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
+  max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 999px; background: var(--fg); color: var(--bg);
+  font-size: 13px; font-weight: 700; box-shadow: 0 8px 24px rgb(0 0 0 / .25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast.pop { animation: toastIn .3s var(--ease-out) both; }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } }
 .suggest small { margin-left: 8px; font-size: 11px; color: var(--muted); }
 .path { margin: 0; font-size: 12px; color: var(--muted); }
 .hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 2; }
